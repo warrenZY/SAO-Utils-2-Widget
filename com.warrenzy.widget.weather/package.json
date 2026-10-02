@@ -1,0 +1,40 @@
+{
+    "name": "com.warrenzy.widget.weather",
+    "version": "1.0.0-fix.20261001",
+
+    "title": {
+        "en": "wttr.in (Fix 2026-10-01)",
+        "zh": "wttr.in（修复版 2026-10-01）",
+        "zh_TW": "wttr.in（修復版 2026-10-01）",
+        "ja": "wttr.in (修正版 2026-10-01)"
+    },
+
+    "description": {
+        "en": "A weather widget based on the wttr.in data source. Displays location, moon phase, weather condition (icon + text), temperature, and humidity. (Unofficial fix, display bug fix only, updated on Oct 1, 2026).",
+        "zh": "基于 wttr.in 数据源的天气控件。显示位置、月相、天气状况（图标+文字）、温度和湿度。（非官方修复版，仅修复显示问题，修复日期：2026年10月1日）",
+        "zh_TW": "基於 wttr.in 數據源的天气小部件。顯示位置、月相、天氣狀況（圖示+文字）、溫度和濕度。（非官方修復版，僅修復顯示問題，修復日期：2026年10月1日）",
+        "ja": "wttr.inのデータソースに基づく天気ウィジェット。位置、月相、天気状態（アイコン+テキスト）、気温、湿度を表示します。（非公式修正版、表示バグのみ修正、修正日：2026年10月1日）"
+    },
+
+    "author": { "name": "Joshua GPBeta & warrenZY (Fix)", "email": "studiocghibli@gmail.com", "url": "http://www.gpbeta.com" },
+
+    "engines": {
+        "qt.quick": ">=2.12",
+        "nvg.api": "~1"
+    },
+
+    "resources": [
+        {
+            "location": "/preset/wttr.in-fix",
+            "catalog": "preset/widget",
+            "title": {
+                "en": "wttr.in Weather Widget (Fix 2026-10-01)",
+                "zh": "wttr.in 天气控件（修复版 2026-10-01）",
+                "zh_TW": "wttr.in 天氣小部件（修復版 2026-10-01）",
+                "ja": "wttr.in 天気ウィジェット (修正版 2026-10-01)"
+            },
+            "preview": "Presets/widget-wttr.in.png",
+            "entry": "Presets/widget-wttr.in.json"
+        }
+    ]
+}

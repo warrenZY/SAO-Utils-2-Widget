@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map>
+    <list name="tiles">
+        <map>
+            <list name="items">
+                <map>
+                    <value name="label">"wttr.in"</value>
+                    <value name="content">"data-text"</value>
+                    <value name="width">6</value>
+                    <value name="height">1.5</value>
+                    <value name="data">{"mode":0,"unit":"","interval":900000,"update":{"init":"this.status = nvg.Value.Null;\nlocal.url = \"https://wttr.in/?A&amp;format=%l+%m\\n%c%C+%t+%h \";\n// Reference\n// https://github.com/chubin/wttr.in","execute":"if (this.status === nvg.Value.Loading)\n    return;\n\nthis.status = nvg.Value.Loading;\n\nconst value = this;\nconst xhr = new XMLHttpRequest();\nxhr.onerror = function () {\n    value.status = nvg.Value.Error;\n}\nxhr.onload = function () {\n    if (xhr.status &gt;= 200 &amp;&amp; xhr.status &lt; 300) {\n        value.current = xhr.response;\n        value.status = nvg.Value.Ready;\n    } else { xhr.onerror(); }\n}\nxhr.responseType = 'text';\nxhr.open(\"GET\", local.url);\nxhr.send();","values":[],"actions":[]},"label":"#Version: October 2, 2026","source":"nvg://system/data#misc","value":"script-value"}</value>
+                </map>
+            </list>
+        </map>
+    </list>
+    <value name="background">{"normal":"nvg://hud.widget.gpbeta.com/background#FB-Log.9.png","hovered":"nvg://hud.widget.gpbeta.com/background#FB-Log-hovered.9.png","pressed":"nvg://hud.widget.gpbeta.com/background#FB-Log-pressed.9.png"}</value>
+</map>
