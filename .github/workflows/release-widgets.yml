@@ -1,0 +1,188 @@
+name: Release Widgets (Manual)
+
+# Manual trigger via Actions tab -> "Run workflow".
+# Each changed widget (i.e. package.json version bumped) gets its OWN Release.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Only release these widget dirs (comma-separated). Leave empty to scan all.'
+        required: false
+        default: ''
+      force:
+        description: 'Force republish even if the tag/Release already exists'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  # --------------------------------------------------------------------
+  # 1. Plan: scan widget dirs, read version, decide which ones need a Release.
+  # --------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix:       ${{ steps.scan.outputs.matrix }}
+      has_releases: ${{ steps.scan.outputs.has_releases }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure all tags are fetched
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          echo "[info] Latest local tags:"
+          git tag --sort=-creatordate | head -n 10 | sed 's/^/    /' || true
+
+      - name: Scan widget directories
+        id: scan
+        run: |
+          set -euo pipefail
+
+          ONLY="${{ github.event.inputs.only }}"
+          FORCE="${{ github.event.inputs.force }}"
+          echo "[info] only='$ONLY' force=$FORCE"
+
+          # ---- Build the candidate list ----
+          if [ -n "$ONLY" ]; then
+            CANDIDATES=$(echo "$ONLY" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v '^$' || true)
+          else
+            CANDIDATES=$(for d in */; do
+              d="${d%/}"
+              case "$d" in .*) continue ;; esac
+              [ -f "$d/package.json" ] && echo "$d"
+            done)
+          fi
+
+          echo "[info] Candidate dirs:"
+          if [ -z "$CANDIDATES" ]; then
+            echo "    (none)"
+          else
+            echo "$CANDIDATES" | sed 's/^/    /'
+          fi
+
+          # ---- Decide what needs a Release ----
+          MATRIX="[]"
+          while IFS= read -r DIR; do
+            [ -z "$DIR" ] && continue
+            PKG="$DIR/package.json"
+
+            if [ ! -f "$PKG" ]; then
+              echo "[warn] $PKG not found; skipping '$DIR'"
+              continue
+            fi
+            if ! jq empty "$PKG" >/dev/null 2>&1; then
+              echo "[warn] $PKG is not valid JSON; skipping '$DIR'"
+              continue
+            fi
+
+            NAME=$(jq -r '.name // "'"$DIR"'"' "$PKG")
+            VERSION=$(jq -r '.version // ""' "$PKG")
+            if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+              echo "[warn] $PKG has no version; skipping '$DIR'"
+              continue
+            fi
+
+            TAG="${DIR}-v${VERSION}"
+
+            if [ "$FORCE" != "true" ] && git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "[skip] $DIR -> tag '$TAG' already exists (use force=true to republish)"
+              continue
+            fi
+
+            echo "[plan] $DIR -> tag='$TAG' version='$VERSION'"
+            MATRIX=$(echo "$MATRIX" | jq -c \
+              --arg d "$DIR" --arg t "$TAG" --arg v "$VERSION" \
+              '. + [{dir:$d, tag:$t, version:$v}]')
+          done <<< "$CANDIDATES"
+
+          COUNT=$(echo "$MATRIX" | jq 'length')
+          echo "[info] Planned releases: $COUNT"
+          echo "$MATRIX" | jq '.' | sed 's/^/    /'
+
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_releases=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "has_releases=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # --------------------------------------------------------------------
+  # 2. Release: one Release per widget, in parallel.
+  # --------------------------------------------------------------------
+  release:
+    needs: plan
+    if: needs.plan.outputs.has_releases == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package widget
+        id: pack
+        run: |
+          set -euo pipefail
+          DIR="${{ matrix.dir }}"
+          TAG="${{ matrix.tag }}"
+          VERSION="${{ matrix.version }}"
+          PKG="$DIR/package.json"
+
+          OUT="/tmp/${DIR}.nvg"
+          NOTES="/tmp/${DIR}.md"
+
+          # --- Create archive ---
+          # cd into $DIR so the archive root contains its contents directly
+          # (Presets/, package.json, ...), NOT the DIR itself.
+          echo "[info] Packaging '$DIR' -> '$OUT'"
+          rm -f "$OUT"
+          ( cd "$DIR" && zip -r "$OUT" . -x '*.DS_Store' >/dev/null )
+          echo "[info] Archive listing:"
+          unzip -l "$OUT" | sed 's/^/    /'
+
+          # --- Build release notes from package.json ---
+          echo "[info] Building release notes from '$PKG'"
+          NAME=$(jq -r '.name // "'"$DIR"'"' "$PKG")
+          {
+            echo "## \`${NAME}\`"
+            echo ""
+            echo "> **Version**: \`${VERSION}\`"
+            echo ""
+            echo "### Titles"
+            echo ""
+            jq -r 'if .title then (.title | to_entries[] | "- **\(.key)**: \(.value)") else "_no title field_" end' "$PKG"
+            echo ""
+            echo "### Descriptions"
+            echo ""
+            jq -r 'if .description then (.description | to_entries[] | "<details>\n<summary><b>\(.key)</b></summary>\n\n\(.value)\n\n</details>\n") else "_no description field_" end' "$PKG"
+          } > "$NOTES"
+
+          echo "[info] Release notes:"
+          sed 's/^/    /' "$NOTES"
+
+          echo "asset=$OUT"   >> "$GITHUB_OUTPUT"
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:  ${{ matrix.tag }}
+          name:      ${{ matrix.tag }}
+          body_path: ${{ steps.pack.outputs.notes }}
+          files:     ${{ steps.pack.outputs.asset }}
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
