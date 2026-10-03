@@ -1,0 +1,43 @@
+{
+  "name": "com.warrenzy.widget.countdown",
+  "version": "2.0.1",
+  "title": {
+    "en": "Countdown Widget",
+    "zh": "倒计时控件",
+    "zh_TW": "倒計時控件",
+    "ja": "カウントダウンウィジェット"
+  },
+  "description": {
+    "en": "A countdown widget that supports multiple named profiles and lets you customize fonts, colors, stroke, and line height.",
+    "zh": "支持多套命名配置的倒计时控件，可自定义字体、颜色、描边和行高。",
+    "zh_TW": "支援多套命名配置的倒計時控件，可自訂字體、顏色、描邊和行高。",
+    "ja": "複数のプロファイルに対応したカウントダウンウィジェット。フォント、色、ストローク、行の高さを自由に設定できます。"
+  },
+  "homepage": "https://github.com/warrenZY/SAO-Utils-2-Widget",
+  "bugs": {
+    "url": "https://github.com/warrenZY/SAO-Utils-2-Widget/issues"
+  },
+  "author": {
+    "name": "warrenZY",
+    "url": "https://github.com/warrenZY"
+  },
+  "engines": {
+    "qt.quick": ">=2.12",
+    "nvg.api": "~1"
+  },
+  "main": "module.qml",
+  "resources": [
+    {
+      "location": "/widget",
+      "catalog": "widget",
+      "title": {
+        "en": "Countdown Widget",
+        "zh": "倒计时桌面组件",
+        "zh_TW": "倒計時桌面組件",
+        "ja": "カウントダウンウィジェット"
+      },
+      "preview": "Images/widget-countdown.png",
+      "entry": "qml/CountdownWidget.qml"
+    }
+  ]
+}
