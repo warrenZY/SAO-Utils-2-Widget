@@ -1,5 +1,4 @@
-// hub.js - cross-instance broadcast bus; must use .pragma library
-// so all QML files share a single listener list.
+// Cross-instance broadcast bus.
 .pragma library
 
 var _listeners = [];

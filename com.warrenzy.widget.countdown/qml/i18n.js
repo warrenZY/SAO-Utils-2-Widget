@@ -1,5 +1,4 @@
-// i18n.js - locale-aware string lookup
-
+// Locale-aware string lookup.
 var _cachedLang = null;
 
 function currentLang() {
@@ -28,9 +27,7 @@ var STRINGS = {
     "settings.fontWeight": "Weight",
     "settings.lineHeight": "Line Height",
     "settings.strokeEnabled": "Enable Stroke",
-    "settings.strokeColor": "Color",
     "settings.fontSearch": "Type to search fonts...",
-    "settings.fontCurrent": "Current: %1",
     "settings.label.title": "Countdown Title",
     "settings.placeholder": "e.g. Distance to 2027 exam",
     "settings.label.date": "Target Date (Y - M - D)",
@@ -63,9 +60,7 @@ var STRINGS = {
     "settings.fontWeight": "字重",
     "settings.lineHeight": "行高",
     "settings.strokeEnabled": "启用描边",
-    "settings.strokeColor": "颜色",
     "settings.fontSearch": "输入以搜索字体...",
-    "settings.fontCurrent": "当前：%1",
     "settings.label.title": "倒计时标题",
     "settings.placeholder": "例如：距离2027考研还有",
     "settings.label.date": "目标日期（年 - 月 - 日）",
@@ -98,9 +93,7 @@ var STRINGS = {
     "settings.fontWeight": "ウェイト",
     "settings.lineHeight": "行の高さ",
     "settings.strokeEnabled": "ストロークを有効化",
-    "settings.strokeColor": "色",
     "settings.fontSearch": "入力して検索...",
-    "settings.fontCurrent": "現在：%1",
     "settings.label.title": "カウントダウンタイトル",
     "settings.placeholder": "例：2027年試験まで",
     "settings.label.date": "目標日付（年 - 月 - 日）",
