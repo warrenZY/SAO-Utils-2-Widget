@@ -1,4 +1,5 @@
-// Desktop widget: renders title + countdown for this instance's profile.
+// Desktop widget: renders the title + countdown for this instance's
+// currently bound profile.
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import NERvGear 1.0 as NVG
@@ -12,7 +13,6 @@ T.Widget {
 
     title: I18n.t("widget.title")
     solid: true
-
     implicitWidth: 260
     implicitHeight: 80
 
@@ -33,8 +33,8 @@ T.Widget {
     Component.onCompleted: {
         Cfg.ensureConfigFile(widget);
 
-        // Wrap in a closure: the hub is a .pragma library module, so
-        // `this` would not be bound to `widget` in a direct method ref.
+        // Hub is a .pragma library, so `this` would be lost on a direct
+        // method reference. Wrap in a closure instead.
         widget.hubSubscriptionId = Hub.subscribe(function () {
             widget.refreshProfile();
             widget.refreshCountdown();
@@ -51,8 +51,8 @@ T.Widget {
         }
     }
 
-    // One-shot ticker; refreshCountdown re-arms it after each run
-    // so that the widget only wakes up when a visible digit flips.
+    // One-shot ticker; refreshCountdown re-arms it each run so the
+    // widget only wakes when a visible digit flips.
     Timer {
         id: ticker
         running: true
@@ -61,7 +61,7 @@ T.Widget {
         onTriggered: widget.refreshCountdown()
     }
 
-    // Reload the shared profile store and pick this widget's entry.
+    // Pull this widget's entry from the shared store.
     function refreshProfile() {
         var cfg = Cfg.loadConfig();
         var p = null;
@@ -74,8 +74,8 @@ T.Widget {
             widget.profile = p;
     }
 
-    // Recompute the display text, then schedule the next wake-up to
-    // land just after the last visible digit changes.
+    // Recompute text and schedule the next wake-up at the moment the
+    // last visible digit will change.
     function refreshCountdown() {
         var p = widget.profile;
         var targetMs = (p && p.targetDate)
@@ -106,7 +106,7 @@ T.Widget {
             text = days + I18n.t("unit.day") + " "
                  + hours + I18n.t("unit.hour") + " "
                  + minutes + I18n.t("unit.min");
-            quantum = 60000;   // only the minute digit is visible
+            quantum = 60000;
         } else if (hours > 0) {
             text = hours + I18n.t("unit.hour") + " "
                  + minutes + I18n.t("unit.min") + " "
@@ -120,10 +120,8 @@ T.Widget {
 
         widget.countdownText = text;
 
-        // +50ms tolerance so we land just past the boundary.
         var next = (diff % quantum) + 50;
         if (next < 200) next = 200;
-
         ticker.interval = next;
         ticker.restart();
     }
@@ -139,7 +137,7 @@ T.Widget {
         (widget.profile && typeof widget.profile.lineHeight === "number")
             ? widget.profile.lineHeight : Cfg.DEFAULT_LINE_HEIGHT
 
-    // Stroke only drawn when explicitly enabled and color is set.
+    // Stroke is only applied when enabled and a color is set.
     readonly property string effectiveStrokeColor: {
         if (!widget.profile) return "";
         if (!widget.profile.strokeEnabled) return "";

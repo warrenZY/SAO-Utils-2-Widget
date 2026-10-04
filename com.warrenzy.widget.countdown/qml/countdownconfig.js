@@ -1,5 +1,4 @@
-// countdownconfig.js - profile storage; must not use .pragma library
-
+// Profile storage.
 var PLUGIN = "com.warrenzy.widget.countdown";
 var GROUP = "profiles";
 
@@ -25,16 +24,13 @@ var DEFAULT_LINE_HEIGHT = 1.0;
 var DEFAULT_STROKE_COLOR = "#000000";
 var DEFAULT_STROKE_ON = false;
 
+// Wrap a family name in a fallback stack ending in the CJK font.
 function makeFontStack(family) {
   if (!family || typeof family !== "string") return DEFAULT_FONT_STACK;
   family = family.trim();
   if (!family) return DEFAULT_FONT_STACK;
   if (family.indexOf(FONT_FALLBACK) >= 0) return family;
   return family + ", " + FONT_FALLBACK;
-}
-
-function defaultFontFamily() {
-  return DEFAULT_FONT;
 }
 
 function newProfileId() {
@@ -56,14 +52,20 @@ function ensureConfigFile(owner) {
   }
 }
 
-// Sanitize a single raw object into a well-formed profile.
-// Returns null if the input is not a plain object.
+// Return a clean copy of a profile with all fields filled in. Null
+// for non-object inputs.
 function normalizeProfile(p) {
   if (!p || typeof p !== "object" || Array.isArray(p)) return null;
 
   var out = {
     id: typeof p.id === "string" && p.id ? p.id : newProfileId(),
-    name: typeof p.name === "string" && p.name ? p.name : "Profile",
+    name:
+      typeof p.name === "string" && p.name
+        ? p.name
+        : "Profile " +
+          (typeof p.id === "string"
+            ? p.id.slice(-5)
+            : Date.now().toString().slice(-5)),
     title: typeof p.title === "string" ? p.title : "",
     targetDate:
       typeof p.targetDate === "string" && p.targetDate
@@ -94,7 +96,7 @@ function normalizeProfile(p) {
         : DEFAULT_FONT,
   };
 
-  // Migrate legacy numeric strokeWidth into a boolean flag.
+  // Old format used numeric strokeWidth; map > 0 to enabled.
   if (typeof p.strokeEnabled === "boolean") out.strokeEnabled = p.strokeEnabled;
   else if (typeof p.strokeWidth === "number")
     out.strokeEnabled = p.strokeWidth > 0;
@@ -103,7 +105,7 @@ function normalizeProfile(p) {
   return out;
 }
 
-// Reads config; tolerates partial corruption by salvaging valid profiles.
+// Read config; salvage any well-formed profiles, drop the rest.
 function loadConfig() {
   var map = null;
   try {
@@ -116,7 +118,7 @@ function loadConfig() {
   try {
     raw = JSON.parse(json);
   } catch (e) {
-    console.warn("[countdown] config parse failed, starting clean: " + e);
+    console.warn("[countdown] config parse failed, resetting: " + e);
     return { profiles: [] };
   }
   if (!raw || typeof raw !== "object") return { profiles: [] };
@@ -130,11 +132,11 @@ function loadConfig() {
   return { profiles: out };
 }
 
+// Write back, re-normalising every entry first.
 function saveConfig(cfg, owner) {
   var map = NVG.Settings.load(PLUGIN, GROUP);
   if (!(map instanceof NVG.SettingsMap)) map = NVG.Settings.createMap(owner);
 
-  // Always re-emit a clean array of normalized profiles.
   var clean = [];
   var src = cfg && Array.isArray(cfg.profiles) ? cfg.profiles : [];
   for (var i = 0; i < src.length; ++i) {

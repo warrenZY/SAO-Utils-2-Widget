@@ -11,8 +11,6 @@ TextField {
     property int padWidth: 0
     property Item nextField: null
 
-    signal committed()
-
     horizontalAlignment: TextInput.AlignHCenter
     verticalAlignment: TextInput.AlignVCenter
     selectByMouse: true
@@ -49,7 +47,6 @@ TextField {
     onAccepted: {
         commitText();
         if (nextField) nextField.forceActiveFocus();
-        committed();
     }
 
     MouseArea {

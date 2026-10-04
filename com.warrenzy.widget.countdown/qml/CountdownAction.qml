@@ -18,6 +18,8 @@ T.Action {
             console.warn("[countdown] no widgetRef on Action");
             return;
         }
+
+        // Existing window: bring it forward.
         if (thiz.settingsWindow) {
             try { thiz.settingsWindow.requestActivate(); return; }
             catch (e) { thiz.settingsWindow = null; }
@@ -30,6 +32,7 @@ T.Action {
                          + component.errorString());
             return;
         }
+
         var win = component.createObject(thiz, {
             "targetWidget": thiz.widgetRef,
             "ownerAction":  thiz
