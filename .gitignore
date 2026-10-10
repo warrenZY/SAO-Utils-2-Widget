@@ -12,3 +12,9 @@
 [Rr]elease/
 *.VC.db
 *.VC.VC.opendb
+
+# Qt Linguist tool directory
+translations/linguist_6.11.0/
+
+# Compiled translation binaries
+translations/**/*.qm

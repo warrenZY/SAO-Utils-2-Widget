@@ -5,7 +5,6 @@ import QtQuick.Layouts 1.12
 import NERvGear 1.0 as NVG
 import NERvGear.Controls 1.0
 import NERvGear.Preferences 1.0 as P
-import "i18n.js" as I18n
 import "countdownconfig.js" as Cfg
 import "hub.js" as Hub
 
@@ -16,7 +15,7 @@ NVG.Window {
     property var ownerAction: null
     property int hubSubscriptionId: -1
 
-    title: I18n.t("settings.title")
+    title: qsTr("Countdown Settings")
     visible: true
     minimumWidth: 480
     minimumHeight: 640
@@ -48,8 +47,30 @@ NVG.Window {
         readonly property color previewBorder: "#dddddd"
     }
 
+    property var config: ({ profiles: [] })
+    property string currentProfileId: ""
+    property var profileList: []
+
+    // Per-id drafts this window has edited but not persisted.
+    property var formCache: ({})
+    // Ids this window has created but not yet persisted.
+    property var newIds: ({})
+    // Derived: ids whose in-window content differs from config.
+    property var unsavedIds: ({})
+
+    property var allFonts: []
+    property var filteredFontList: []
+    property string pendingFont: Cfg.DEFAULT_FONT
+    property int  pendingFontWeight: Cfg.DEFAULT_FONT_WEIGHT
+    property real pendingLineHeight: Cfg.DEFAULT_LINE_HEIGHT
+    property bool fontExpanded: false
+
+    property bool loadingForm: false
+
+    QtObject { id: settingsOwner }
+
     Component.onCompleted: {
-        allFonts = buildAllFonts();
+        allFonts = Cfg.allFontFamilies().slice();
         filteredFontList = allFonts.slice();
 
         hubSubscriptionId = Hub.subscribe(function () {
@@ -58,10 +79,17 @@ NVG.Window {
 
         config = Cfg.loadConfig();
         currentProfileId = (targetWidget && targetWidget.settings.profileId) || "";
+
+        // Bound id is stale: fall back for display only. The widget
+        // keeps its binding until the user applies from this window.
+        if (currentProfileId && !Cfg.findProfile(config, currentProfileId))
+            currentProfileId = "";
+
         if (!currentProfileId && config.profiles.length > 0)
             currentProfileId = config.profiles[0].id;
+
         refreshProfileList();
-        loadForm();
+        if (currentProfileId) loadForm();
     }
 
     Component.onDestruction: {
@@ -72,49 +100,292 @@ NVG.Window {
     }
     onClosing: destroy()
 
-    property var config: ({ profiles: [] })
-    property string currentProfileId: ""
-    property var profileList: []
-
-    property var allFonts: []
-    property var filteredFontList: []
-    property string pendingFont: Cfg.DEFAULT_FONT
-    property int  pendingFontWeight: 50
-    property real pendingLineHeight: Cfg.DEFAULT_LINE_HEIGHT
-    property bool fontExpanded: false
-
-    property bool loadingForm: false
-    property bool formDirty: false
-
-    QtObject { id: settingsOwner }
+    // ---- Hub ----
 
     function onHubNotify() {
-        config = Cfg.loadConfig();
+        var r = Cfg.mergeWindowState(Cfg.loadConfig(), formCache, newIds);
+        config = r.config;
+        formCache = r.formCache;
+        newIds = r.newIds;
         refreshProfileList();
+
+        // Current profile was removed elsewhere: fall back only when
+        // this window holds no unsaved draft for it.
+        if (currentProfileId && !formCache[currentProfileId] &&
+            !Cfg.findProfile(config, currentProfileId)) {
+            currentProfileId = config.profiles.length > 0
+                             ? config.profiles[0].id : "";
+            if (currentProfileId) { loadForm(); return; }
+            unsavedIds = {};
+            return;
+        }
+
+        // Current profile has no local edits: refresh from config.
+        if (currentProfileId && !formCache[currentProfileId]) {
+            loadForm();
+            return;
+        }
+
+        syncUnsavedIds();
     }
 
-    function buildAllFonts() {
-        var sys = [];
-        try { sys = Qt.fontFamilies(); } catch (e) { }
-        var seen = {};
-        var result = [];
-        if (Cfg.DEFAULT_FONT) {
-            result.push(Cfg.DEFAULT_FONT);
-            seen[Cfg.DEFAULT_FONT] = true;
+    // ---- Profile list ----
+
+    function refreshProfileList() { profileList = config.profiles.slice(); }
+
+    function currentProfile() { return Cfg.findProfile(config, currentProfileId); }
+
+    // ---- Dirty state ----
+
+    // Sync the current form into formCache and recompute unsavedIds.
+    // A profile is cached when its form differs from config, or when
+    // it is a not-yet-persisted creation of this window.
+    function syncProfileState() {
+        if (loadingForm || !currentProfileId) return;
+
+        var p = Cfg.findProfile(config, currentProfileId);
+
+        // If the bound id no longer exists in config and was not just
+        // created by this window, don't accumulate edits for it — a
+        // later save would materialise a phantom profile.
+        if (!p && !newIds[currentProfileId]) {
+            if (formCache[currentProfileId]) {
+                var c = {};
+                for (var k in formCache)
+                    if (k !== currentProfileId) c[k] = formCache[k];
+                formCache = c;
+                syncUnsavedIds();
+            }
+            return;
         }
-        var others = [];
-        for (var i = 0; i < sys.length; ++i) {
-            var n = sys[i];
-            if (!n || typeof n !== "string") continue;
-            n = n.trim();
-            if (!n || seen[n]) continue;
-            seen[n] = true;
-            others.push(n);
-        }
-        others.sort(function (a, b) { return a.localeCompare(b); });
-        for (var j = 0; j < others.length; ++j) result.push(others[j]);
-        return result;
+
+        var s = snapshotForm();
+        var differs = p ? Cfg.snapshotDiffersFrom(s, p) : true;
+        var keep = differs || newIds[currentProfileId];
+
+        var c2 = {};
+        for (var k2 in formCache) c2[k2] = formCache[k2];
+        if (keep) c2[currentProfileId] = s;
+        else delete c2[currentProfileId];
+
+        formCache = c2;
+        syncUnsavedIds();
     }
+
+    function syncUnsavedIds() {
+        var result = {};
+        for (var id in formCache) result[id] = true;
+        unsavedIds = result;
+    }
+
+    // ---- Form <-> snapshot ----
+
+    function snapshotForm() {
+        return {
+            name: profileNameField.text,
+            title: titleField.text,
+            targetDate: new Date(
+                yearField.value, monthField.value - 1, dayField.value,
+                hourField.value, minuteField.value, 0).toISOString(),
+            titleSize: titleSizeField.value,
+            valueSize: valueSizeField.value,
+            titleColor: String(titleColorPicker.value),
+            valueColor: String(valueColorPicker.value),
+            strokeColor: String(strokeColorPicker.value),
+            strokeEnabled: !!strokeSwitchPref.value,
+            fontFamily: settingsWindow.pendingFont || Cfg.DEFAULT_FONT,
+            fontWeight: settingsWindow.pendingFontWeight,
+            lineHeight: lineHeightField.value,
+        };
+    }
+
+    function profileToSnapshot(p) {
+        return {
+            name: p.name || "",
+            title: p.title || "",
+            targetDate: p.targetDate,
+            titleSize: p.titleSize,
+            valueSize: p.valueSize,
+            titleColor: p.titleColor,
+            valueColor: p.valueColor,
+            strokeColor: p.strokeColor,
+            strokeEnabled: !!p.strokeEnabled,
+            fontFamily: p.fontFamily,
+            fontWeight: p.fontWeight,
+            lineHeight: p.lineHeight,
+        };
+    }
+
+    function applySnapshot(s) {
+        loadingForm = true;
+
+        profileNameField.text = s.name  || "";
+        titleField.text       = s.title || "";
+
+        titleSizeField.value = s.titleSize;
+        valueSizeField.value = s.valueSize;
+
+        titleColorPicker.value  = s.titleColor;
+        valueColorPicker.value  = s.valueColor;
+        strokeColorPicker.value = s.strokeColor;
+        strokeSwitchPref.value  = !!s.strokeEnabled;
+
+        settingsWindow.pendingFont = s.fontFamily;
+        settingsWindow.pendingFontWeight = s.fontWeight;
+
+        var d = new Date(s.targetDate);
+        yearField.value   = d.getFullYear();
+        monthField.value  = d.getMonth() + 1;
+        dayField.value    = d.getDate();
+        hourField.value   = d.getHours();
+        minuteField.value = d.getMinutes();
+
+        lineHeightField.value = s.lineHeight;
+
+        fontSearchField.text = "";
+        syncFontWeightCombo();
+
+        loadingForm = false;
+    }
+
+    function loadForm() {
+        if (!currentProfileId) return;
+
+        var cached = formCache[currentProfileId];
+        if (cached) {
+            applySnapshot(cached);
+        } else {
+            var p = currentProfile();
+            applySnapshot(p ? p : Cfg.makeDefaultProfile("", ""));
+        }
+        syncProfileState();
+    }
+
+    // ---- Profile actions ----
+
+    // Create a new profile, cache its default snapshot as a draft, and
+    // switch the form to it.
+    function addProfile() {
+        syncProfileState();
+
+        var name = qsTr("New Profile %1").arg(config.profiles.length + 1);
+        var p = Cfg.makeDefaultProfile(name, qsTr("Time until tomorrow"));
+        var s = profileToSnapshot(p);
+
+        var c = {};
+        for (var k in formCache) c[k] = formCache[k];
+        c[p.id] = s;
+        formCache = c;
+
+        var n = {};
+        for (var nk in newIds) n[nk] = true;
+        n[p.id] = true;
+        newIds = n;
+
+        config.profiles.push(p);
+        currentProfileId = p.id;
+        refreshProfileList();
+
+        applySnapshot(s);
+        syncUnsavedIds();
+    }
+
+    // Delete the currently selected profile from disk and switch to
+    // whatever remains. Persisted independently of the draft model.
+    // currentProfileId is left untouched; onHubNotify detects the
+    // removal and falls back for display. The widget binding is left
+    // untouched too: only an explicit Apply rebinds it.
+    function removeCurrentProfile() {
+        var list = config.profiles;
+        if (!list || list.length === 0) return;
+
+        var idx = -1;
+        for (var i = 0; i < list.length; ++i) {
+            if (list[i] && list[i].id === currentProfileId) {
+                idx = i; break;
+            }
+        }
+        if (idx < 0) return;
+
+        var removedId = list[idx].id;
+
+        Cfg.deleteProfile(removedId, settingsOwner);
+
+        var c = {};
+        for (var k in formCache)
+            if (k !== removedId) c[k] = formCache[k];
+        formCache = c;
+
+        var n = {};
+        for (var nk in newIds)
+            if (nk !== removedId) n[nk] = true;
+        newIds = n;
+
+        Hub.notify();
+    }
+
+    // ---- Commit ----
+
+    // Persist the given ids (null = every pending draft). Removes those
+    // ids from formCache/newIds, reloads from disk, and broadcasts.
+    function commitTo(ids) {
+        syncProfileState();
+
+        if (ids === null || ids === undefined)
+            ids = Object.keys(formCache);
+
+        var entries = {};
+        for (var i = 0; i < ids.length; ++i) {
+            var id = ids[i];
+            if (formCache[id]) {
+                entries[id] = formCache[id];
+            } else {
+                var p = Cfg.findProfile(config, id);
+                if (p) entries[id] = profileToSnapshot(p);
+            }
+        }
+        Cfg.updateProfiles(entries, settingsOwner);
+
+        var idSet = {};
+        for (var j = 0; j < ids.length; ++j) idSet[ids[j]] = true;
+
+        var c = {};
+        for (var k in formCache)
+            if (!idSet[k]) c[k] = formCache[k];
+        formCache = c;
+
+        var n = {};
+        for (var nk in newIds)
+            if (!idSet[nk]) n[nk] = true;
+        newIds = n;
+
+        Hub.notify();
+    }
+
+    // Persist the current profile and point the widget at it.
+    function applyCurrent() {
+        if (!currentProfileId) return;
+        if (targetWidget)
+            targetWidget.settings.profileId = currentProfileId;
+        commitTo([currentProfileId]);
+    }
+
+    // Persist every pending profile without touching the widget binding.
+    function saveAll() {
+        commitTo(null);
+    }
+
+    // Bind the widget to the current profile, persist every pending
+    // edit, then close the window.
+    function applyAndClose() {
+        if (targetWidget)
+            targetWidget.settings.profileId = currentProfileId || "";
+        commitTo(null);
+        NVG.SystemCall.messageBox({ text: qsTr("Settings saved.") });
+        settingsWindow.close();
+    }
+
+    // ---- Fonts ----
 
     function updateFilteredFonts(query) {
         query = (query || "").toString().trim().toLowerCase();
@@ -126,11 +397,6 @@ NVG.Window {
         filteredFontList = result;
     }
 
-    function refreshProfileList() { profileList = config.profiles.slice(); }
-
-    function currentProfile() { return Cfg.findProfile(config, currentProfileId); }
-    function markDirty() { if (!loadingForm) formDirty = true; }
-
     function syncFontWeightCombo() {
         var w = Cfg.FONT_WEIGHTS;
         for (var i = 0; i < w.length; ++i) {
@@ -140,104 +406,6 @@ NVG.Window {
             }
         }
         fontWeightCombo.currentIndex = 0;
-    }
-
-    function pick(p, key, fallback) {
-        return (p && p[key] !== undefined && p[key] !== null)
-               ? p[key] : fallback;
-    }
-
-    function applyFormTo(p) {
-        p.name          = profileNameField.text;
-        p.title         = titleField.text;
-        p.targetDate    = new Date(
-            yearField.value, monthField.value - 1, dayField.value,
-            hourField.value, minuteField.value, 0).toISOString();
-        p.titleSize     = titleSizeField.value;
-        p.valueSize     = valueSizeField.value;
-        p.titleColor    = String(titleColorPicker.value);
-        p.valueColor    = String(valueColorPicker.value);
-        p.strokeColor   = String(strokeColorPicker.value);
-        p.strokeEnabled = !!strokeSwitchPref.value;
-        p.fontFamily    = settingsWindow.pendingFont || Cfg.DEFAULT_FONT;
-        p.fontWeight    = settingsWindow.pendingFontWeight;
-        p.lineHeight    = settingsWindow.pendingLineHeight;
-    }
-
-    function storeForm() {
-        if (!settingsWindow.currentProfileId) return;
-
-        var p = Cfg.findProfile(settingsWindow.config,
-                                settingsWindow.currentProfileId);
-        if (!p) {
-            p = Cfg.makeDefaultProfile(
-                profileNameField.text
-                    || I18n.tf("settings.newProfile",
-                               [settingsWindow.config.profiles.length + 1]),
-                titleField.text);
-            settingsWindow.config.profiles.push(p);
-            settingsWindow.currentProfileId = p.id;
-        }
-        applyFormTo(p);
-    }
-
-    function commitToWidget() {
-        storeForm();
-
-        if (settingsWindow.targetWidget) {
-            settingsWindow.targetWidget.settings.profileId
-                    = settingsWindow.currentProfileId || "";
-        }
-        Cfg.saveConfig(settingsWindow.config, settingsOwner);
-        settingsWindow.formDirty = false;
-
-        Hub.notify();
-    }
-
-    function loadForm() {
-        loadingForm = true;
-        var p = currentProfile();
-
-        profileNameField.text = pick(p, "name", "");
-        titleField.text       = pick(p, "title", "");
-
-        titleSizeField.value    = pick(p, "titleSize", 24);
-        valueSizeField.value    = pick(p, "valueSize", 24);
-        titleColorPicker.value  = pick(p, "titleColor", Cfg.DEFAULT_TITLE_COLOR);
-        valueColorPicker.value  = pick(p, "valueColor", Cfg.DEFAULT_VALUE_COLOR);
-        strokeColorPicker.value = pick(p, "strokeColor", Cfg.DEFAULT_STROKE_COLOR);
-        strokeSwitchPref.value  = !!pick(p, "strokeEnabled", Cfg.DEFAULT_STROKE_ON);
-
-        settingsWindow.pendingFont = pick(p, "fontFamily", Cfg.DEFAULT_FONT);
-        settingsWindow.pendingFontWeight = pick(p, "fontWeight", 50);
-        settingsWindow.pendingLineHeight =
-            pick(p, "lineHeight", Cfg.DEFAULT_LINE_HEIGHT);
-
-        fontSearchField.text = "";
-        lineHeightField.text = Number(settingsWindow.pendingLineHeight).toFixed(1);
-        syncFontWeightCombo();
-
-        var d = (p && p.targetDate)
-                ? new Date(p.targetDate)
-                : new Date(Date.now() + 86400000);
-        yearField.value   = d.getFullYear();
-        monthField.value  = d.getMonth() + 1;
-        dayField.value    = d.getDate();
-        hourField.value   = p ? d.getHours() : 0;
-        minuteField.value = p ? d.getMinutes() : 0;
-
-        loadingForm = false;
-        formDirty = false;
-    }
-
-    function bumpLineHeight(delta) {
-        var v = parseFloat(lineHeightField.text);
-        if (isNaN(v)) v = Cfg.DEFAULT_LINE_HEIGHT;
-        v = v + (delta > 0 ? 0.1 : -0.1);
-        v = Math.max(0.5, Math.min(5.0, Math.round(v * 10) / 10));
-        lineHeightField.text = v.toFixed(1);
-        settingsWindow.pendingLineHeight = v;
-        settingsWindow.markDirty();
     }
 
     ColumnLayout {
@@ -251,7 +419,7 @@ NVG.Window {
             spacing: settingsWindow.style.rowGap
 
             Label {
-                text: I18n.t("settings.profile")
+                text: qsTr("Profile")
                 color: settingsWindow.style.labelColor
                 font.pixelSize: settingsWindow.style.labelSize
                 font.family: settingsWindow.style.labelFont
@@ -263,7 +431,6 @@ NVG.Window {
                 Layout.preferredHeight: settingsWindow.style.fieldHeight
                 font.pixelSize: settingsWindow.style.fieldFontSize
                 model: settingsWindow.profileList
-                textRole: "name"
 
                 currentIndex: {
                     for (var i = 0; i < settingsWindow.profileList.length; ++i) {
@@ -276,20 +443,47 @@ NVG.Window {
 
                 displayText: {
                     if (settingsWindow.profileList.length === 0)
-                        return I18n.t("settings.noProfile");
+                        return qsTr("(No valid profile)");
                     if (currentIndex < 0)
-                        return I18n.t("settings.noProfile");
-                    var base = currentText || "";
-                    return settingsWindow.formDirty
-                           ? base + I18n.t("settings.unsaved") : base;
+                        return qsTr("(No valid profile)");
+                    var name = profileNameField.text || "";
+                    if (!name) name = currentText || "";
+                    return settingsWindow.unsavedIds[settingsWindow.currentProfileId]
+                         ? name + qsTr(" (unsaved)")
+                         : name;
                 }
+
+                delegate: ItemDelegate {
+                    id: profileDelegate
+                    width: profileCombo.width
+                    highlighted: profileCombo.highlightedIndex === index
+                    leftPadding: settingsWindow.style.padH
+                    rightPadding: settingsWindow.style.padH
+
+                    contentItem: Text {
+                        text: {
+                            var d = modelData;
+                            var name = (d && d.name) ? d.name : "";
+                            var dirty = d && settingsWindow.unsavedIds[d.id];
+                            return dirty ? name + qsTr(" (unsaved)")
+                                         : name;
+                        }
+                        color: "#333333"
+                        font: profileCombo.font
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+
                 onActivated: {
-                    settingsWindow.storeForm();
+                    settingsWindow.syncProfileState();
+
                     if (index < 0
-                            || index >= settingsWindow.config.profiles.length)
+                            || index >= settingsWindow.profileList.length)
                         return;
-                    var p = settingsWindow.config.profiles[index];
+                    var p = settingsWindow.profileList[index];
                     if (!p || !p.id) return;
+                    if (p.id === settingsWindow.currentProfileId) return;
                     settingsWindow.currentProfileId = p.id;
                     settingsWindow.loadForm();
                 }
@@ -299,41 +493,14 @@ NVG.Window {
                 text: "+"
                 Layout.preferredWidth: settingsWindow.style.fieldHeight
                 Layout.preferredHeight: settingsWindow.style.fieldHeight
-                onClicked: {
-                    settingsWindow.storeForm();
-                    var name = I18n.tf("settings.newProfile",
-                                       [settingsWindow.config.profiles.length + 1]);
-                    var p = Cfg.makeDefaultProfile(
-                        name, I18n.t("data.defaultTitleTomorrow"));
-                    settingsWindow.config.profiles.push(p);
-                    settingsWindow.currentProfileId = p.id;
-                    settingsWindow.refreshProfileList();
-                    settingsWindow.loadForm();
-                    settingsWindow.formDirty = true;
-                }
+                onClicked: settingsWindow.addProfile()
             }
             Button {
                 text: "\u00D7"
                 Layout.preferredWidth: settingsWindow.style.fieldHeight
                 Layout.preferredHeight: settingsWindow.style.fieldHeight
                 enabled: settingsWindow.profileList.length > 0
-                onClicked: {
-                    var list = settingsWindow.config.profiles;
-                    if (!list || list.length === 0) return;
-                    var idx = -1;
-                    for (var i = 0; i < list.length; ++i) {
-                        if (list[i] && list[i].id === settingsWindow.currentProfileId) {
-                            idx = i; break;
-                        }
-                    }
-                    if (idx < 0) return;
-                    list.splice(idx, 1);
-                    settingsWindow.currentProfileId =
-                        list.length === 0 ? "" : list[0].id;
-                    settingsWindow.refreshProfileList();
-                    settingsWindow.loadForm();
-                    settingsWindow.formDirty = true;
-                }
+                onClicked: settingsWindow.removeCurrentProfile()
             }
         }
 
@@ -351,7 +518,7 @@ NVG.Window {
                 spacing: settingsWindow.style.rowGap
 
                 Label {
-                    text: I18n.t("settings.profileName")
+                    text: qsTr("Profile Name")
                     color: settingsWindow.style.labelColor
                     font.pixelSize: settingsWindow.style.labelSize
                     font.family: settingsWindow.style.labelFont
@@ -364,11 +531,11 @@ NVG.Window {
                     selectByMouse: true
                     leftPadding: settingsWindow.style.padH
                     rightPadding: settingsWindow.style.padH
-                    onTextChanged: settingsWindow.markDirty()
+                    onTextChanged: settingsWindow.syncProfileState()
                 }
 
                 Label {
-                    text: I18n.t("settings.label.title")
+                    text: qsTr("Countdown Title")
                     color: settingsWindow.style.labelColor
                     font.pixelSize: settingsWindow.style.labelSize
                     font.family: settingsWindow.style.labelFont
@@ -378,16 +545,16 @@ NVG.Window {
                     id: titleField
                     Layout.fillWidth: true
                     Layout.preferredHeight: settingsWindow.style.fieldHeight
-                    placeholderText: I18n.t("settings.placeholder")
+                    placeholderText: qsTr("Enter a title")
                     font.pixelSize: settingsWindow.style.fieldFontSize
                     selectByMouse: true
                     leftPadding: settingsWindow.style.padH
                     rightPadding: settingsWindow.style.padH
-                    onTextChanged: settingsWindow.markDirty()
+                    onTextChanged: settingsWindow.syncProfileState()
                 }
 
                 Label {
-                    text: I18n.t("settings.label.date")
+                    text: qsTr("Target Date (Y-M-D)")
                     color: settingsWindow.style.labelColor
                     font.pixelSize: settingsWindow.style.labelSize
                     font.family: settingsWindow.style.labelFont
@@ -399,25 +566,25 @@ NVG.Window {
                     NumberField { id: yearField
                                   Layout.fillWidth: true
                                   Layout.preferredHeight: settingsWindow.style.fieldHeight
-                                  from: 2024; to: 2099
+                                  from: 1970; to: 9999
                                   nextField: monthField
-                                  onValueChanged: settingsWindow.markDirty() }
+                                  onValueChanged: settingsWindow.syncProfileState() }
                     NumberField { id: monthField
                                   Layout.fillWidth: true
                                   Layout.preferredHeight: settingsWindow.style.fieldHeight
                                   from: 1; to: 12; padWidth: 2
                                   nextField: dayField
-                                  onValueChanged: settingsWindow.markDirty() }
+                                  onValueChanged: settingsWindow.syncProfileState() }
                     NumberField { id: dayField
                                   Layout.fillWidth: true
                                   Layout.preferredHeight: settingsWindow.style.fieldHeight
                                   from: 1; to: 31; padWidth: 2
                                   nextField: hourField
-                                  onValueChanged: settingsWindow.markDirty() }
+                                  onValueChanged: settingsWindow.syncProfileState() }
                 }
 
                 Label {
-                    text: I18n.t("settings.label.time")
+                    text: qsTr("Target Time (H:M)")
                     color: settingsWindow.style.labelColor
                     font.pixelSize: settingsWindow.style.labelSize
                     font.family: settingsWindow.style.labelFont
@@ -431,12 +598,13 @@ NVG.Window {
                                   Layout.preferredHeight: settingsWindow.style.fieldHeight
                                   from: 0; to: 23; padWidth: 2
                                   nextField: minuteField
-                                  onValueChanged: settingsWindow.markDirty() }
+                                  onValueChanged: settingsWindow.syncProfileState() }
                     NumberField { id: minuteField
                                   Layout.fillWidth: true
                                   Layout.preferredHeight: settingsWindow.style.fieldHeight
                                   from: 0; to: 59; padWidth: 2
-                                  onValueChanged: settingsWindow.markDirty() }
+                                  nextField: titleSizeField
+                                  onValueChanged: settingsWindow.syncProfileState() }
                 }
 
                 Divider {
@@ -451,7 +619,7 @@ NVG.Window {
                     spacing: settingsWindow.style.rowGap
 
                     Label {
-                        text: I18n.t("settings.short.title")
+                        text: qsTr("Title")
                         color: settingsWindow.style.labelColor
                         font.pixelSize: settingsWindow.style.labelSize
                         font.family: settingsWindow.style.labelFont
@@ -461,8 +629,8 @@ NVG.Window {
                         id: titleSizeField
                         Layout.preferredWidth: settingsWindow.style.sizeWidth
                         Layout.preferredHeight: settingsWindow.style.fieldHeight
-                        from: 8; to: 60; padWidth: 2
-                        onValueChanged: settingsWindow.markDirty()
+                        from: 8; to: 200
+                        onValueChanged: settingsWindow.syncProfileState()
                     }
                     ColorPicker {
                         id: titleColorPicker
@@ -471,10 +639,7 @@ NVG.Window {
                         textColor: settingsWindow.style.labelColor
                         textSize: settingsWindow.style.labelSize
                         textFont: settingsWindow.style.labelFont
-                        onValueChanged: {
-                            if (settingsWindow.loadingForm) return;
-                            settingsWindow.markDirty();
-                        }
+                        onValueChanged: settingsWindow.syncProfileState()
                     }
                 }
 
@@ -484,7 +649,7 @@ NVG.Window {
                     spacing: settingsWindow.style.rowGap
 
                     Label {
-                        text: I18n.t("settings.short.value")
+                        text: qsTr("Countdown")
                         color: settingsWindow.style.labelColor
                         font.pixelSize: settingsWindow.style.labelSize
                         font.family: settingsWindow.style.labelFont
@@ -494,8 +659,8 @@ NVG.Window {
                         id: valueSizeField
                         Layout.preferredWidth: settingsWindow.style.sizeWidth
                         Layout.preferredHeight: settingsWindow.style.fieldHeight
-                        from: 8; to: 60; padWidth: 2
-                        onValueChanged: settingsWindow.markDirty()
+                        from: 8; to: 200
+                        onValueChanged: settingsWindow.syncProfileState()
                     }
                     ColorPicker {
                         id: valueColorPicker
@@ -504,10 +669,7 @@ NVG.Window {
                         textColor: settingsWindow.style.labelColor
                         textSize: settingsWindow.style.labelSize
                         textFont: settingsWindow.style.labelFont
-                        onValueChanged: {
-                            if (settingsWindow.loadingForm) return;
-                            settingsWindow.markDirty();
-                        }
+                        onValueChanged: settingsWindow.syncProfileState()
                     }
                 }
 
@@ -525,17 +687,14 @@ NVG.Window {
                     P.SwitchPreference {
                         id: strokeSwitchPref
                         name: "strokeEnabled"
-                        label: I18n.t("settings.strokeEnabled")
+                        label: qsTr("Enable Outline")
                         leftPadding: 0
                         Layout.minimumWidth: settingsWindow.style.labelPlusSize
                         Layout.preferredWidth: settingsWindow.style.labelPlusSize
                         Layout.maximumWidth: settingsWindow.style.labelPlusSize
                         Layout.preferredHeight: settingsWindow.style.fieldHeight
                         defaultValue: false
-                        onValueChanged: {
-                            if (settingsWindow.loadingForm) return;
-                            settingsWindow.markDirty();
-                        }
+                        onValueChanged: settingsWindow.syncProfileState()
                     }
 
                     ColorPicker {
@@ -546,10 +705,7 @@ NVG.Window {
                         textSize: settingsWindow.style.labelSize
                         textFont: settingsWindow.style.labelFont
                         enabled: strokeSwitchPref.value
-                        onValueChanged: {
-                            if (settingsWindow.loadingForm) return;
-                            settingsWindow.markDirty();
-                        }
+                        onValueChanged: settingsWindow.syncProfileState()
                     }
                 }
 
@@ -565,7 +721,7 @@ NVG.Window {
                     spacing: settingsWindow.style.rowGap
 
                     Label {
-                        text: I18n.t("settings.font")
+                        text: qsTr("Font")
                         color: settingsWindow.style.labelColor
                         font.pixelSize: settingsWindow.style.labelSize
                         font.family: settingsWindow.style.labelFont
@@ -646,7 +802,7 @@ NVG.Window {
                         selectByMouse: true
                         leftPadding: settingsWindow.style.padH
                         rightPadding: settingsWindow.style.padH
-                        placeholderText: I18n.t("settings.fontSearch")
+                        placeholderText: qsTr("Type to search fonts...")
                         onTextChanged: settingsWindow.updateFilteredFonts(text)
                     }
 
@@ -672,7 +828,7 @@ NVG.Window {
                                 highlighted: modelData === settingsWindow.pendingFont
                                 onClicked: {
                                     settingsWindow.pendingFont = modelData;
-                                    settingsWindow.markDirty();
+                                    settingsWindow.syncProfileState();
                                 }
 
                                 contentItem: Item {
@@ -693,7 +849,7 @@ NVG.Window {
                         Layout.fillWidth: true
                         spacing: settingsWindow.style.rowGap
                         Label {
-                            text: I18n.t("settings.fontWeight")
+                            text: qsTr("Font Weight")
                             color: settingsWindow.style.labelColor
                             font.pixelSize: settingsWindow.style.labelSize
                             font.family: settingsWindow.style.labelFont
@@ -712,7 +868,7 @@ NVG.Window {
                                     return;
                                 settingsWindow.pendingFontWeight
                                         = Cfg.FONT_WEIGHTS[currentIndex].value;
-                                settingsWindow.markDirty();
+                                settingsWindow.syncProfileState();
                             }
                         }
                     }
@@ -721,39 +877,20 @@ NVG.Window {
                         Layout.fillWidth: true
                         spacing: settingsWindow.style.rowGap
                         Label {
-                            text: I18n.t("settings.lineHeight")
+                            text: qsTr("Line Height")
                             color: settingsWindow.style.labelColor
                             font.pixelSize: settingsWindow.style.labelSize
                             font.family: settingsWindow.style.labelFont
                             Layout.preferredWidth: settingsWindow.style.labelWidth
                         }
-                        TextField {
+                        NumberField {
                             id: lineHeightField
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: settingsWindow.style.fieldHeight
-                            font.pixelSize: settingsWindow.style.fieldFontSize
-                            selectByMouse: true
-                            horizontalAlignment: TextInput.AlignHCenter
-                            leftPadding: settingsWindow.style.padH
-                            rightPadding: settingsWindow.style.padH
-                            validator: DoubleValidator {
-                                bottom: 0.5; top: 5.0; decimals: 1
-                                notation: DoubleValidator.StandardNotation
-                            }
-                            onTextEdited: {
-                                var v = parseFloat(text);
-                                if (!isNaN(v) && v >= 0.5 && v <= 5.0) {
-                                    settingsWindow.pendingLineHeight = v;
-                                    settingsWindow.markDirty();
-                                }
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.NoButton
-                                onWheel: {
-                                    settingsWindow.bumpLineHeight(wheel.angleDelta.y);
-                                    wheel.accepted = true;
-                                }
+                            from: 0.5; to: 5.0; decimals: 1
+                            onValueChanged: {
+                                settingsWindow.pendingLineHeight = value;
+                                settingsWindow.syncProfileState();
                             }
                         }
                         Item { Layout.fillWidth: true }
@@ -765,34 +902,41 @@ NVG.Window {
         }
 
         // ---- Action buttons ----
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
             spacing: settingsWindow.style.rowGap
 
-            Button {
-                text: I18n.t("settings.apply")
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: settingsWindow.style.buttonHeight
-                font.pixelSize: settingsWindow.style.fieldFontSize
-                enabled: settingsWindow.targetWidget !== null
-                onClicked: {
-                    settingsWindow.commitToWidget();
-                    NVG.SystemCall.messageBox({ text: I18n.t("settings.applied") });
+                spacing: settingsWindow.style.rowGap
+
+                Button {
+                    text: qsTr("Apply Current")
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: settingsWindow.style.buttonHeight
+                    font.pixelSize: settingsWindow.style.fieldFontSize
+                    enabled: settingsWindow.targetWidget !== null
+                    onClicked: settingsWindow.applyCurrent()
+                }
+
+                Button {
+                    text: qsTr("Save All")
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: settingsWindow.style.buttonHeight
+                    font.pixelSize: settingsWindow.style.fieldFontSize
+                    enabled: settingsWindow.targetWidget !== null
+                    onClicked: settingsWindow.saveAll()
                 }
             }
 
             Button {
-                text: I18n.t("settings.save")
+                text: qsTr("Apply && Close")
                 Layout.fillWidth: true
                 Layout.preferredHeight: settingsWindow.style.buttonHeight
                 font.pixelSize: settingsWindow.style.fieldFontSize
                 highlighted: true
                 enabled: settingsWindow.targetWidget !== null
-                onClicked: {
-                    settingsWindow.commitToWidget();
-                    NVG.SystemCall.messageBox({ text: I18n.t("settings.saved") });
-                    settingsWindow.close();
-                }
+                onClicked: settingsWindow.applyAndClose()
             }
         }
     }

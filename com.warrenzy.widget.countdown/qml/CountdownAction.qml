@@ -2,12 +2,11 @@
 import NERvGear 1.0 as NVG
 import NERvGear.Templates 1.0 as T
 import QtQuick 2.12
-import "i18n.js" as I18n
 
 T.Action {
     id: thiz
 
-    title: I18n.t("action.title")
+    title: qsTr("Settings")
     description: title
 
     property var widgetRef: null

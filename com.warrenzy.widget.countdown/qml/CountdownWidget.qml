@@ -1,17 +1,15 @@
-// Desktop widget: renders the title + countdown for this instance's
-// currently bound profile.
+// Desktop widget: renders title + countdown for this instance's profile.
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import NERvGear 1.0 as NVG
 import NERvGear.Templates 1.0 as T
-import "i18n.js" as I18n
 import "countdownconfig.js" as Cfg
 import "hub.js" as Hub
 
 T.Widget {
     id: widget
 
-    title: I18n.t("widget.title")
+    title: qsTr("Countdown")
     solid: true
     implicitWidth: 260
     implicitHeight: 80
@@ -20,7 +18,7 @@ T.Widget {
 
     menu: Menu {
         MenuItem {
-            text: I18n.t("action.title")
+            text: qsTr("Settings")
             onTriggered: widget.action.execute()
         }
     }
@@ -33,8 +31,6 @@ T.Widget {
     Component.onCompleted: {
         Cfg.ensureConfigFile(widget);
 
-        // Hub is a .pragma library, so `this` would be lost on a direct
-        // method reference. Wrap in a closure instead.
         widget.hubSubscriptionId = Hub.subscribe(function () {
             widget.refreshProfile();
             widget.refreshCountdown();
@@ -61,17 +57,27 @@ T.Widget {
         onTriggered: widget.refreshCountdown()
     }
 
-    // Pull this widget's entry from the shared store.
+    // Pull this widget's entry from the shared store. The binding is
+    // sticky: a stale id is kept as-is and the widget shows the empty
+    // state, so a delete in another window does not silently rebind
+    // this instance elsewhere. Only an unbound instance adopts the
+    // first profile.
     function refreshProfile() {
         var cfg = Cfg.loadConfig();
         var p = null;
-        if (cfg.profiles && cfg.profiles.length > 0)
-            p = Cfg.findProfile(cfg, widget.profileId) || cfg.profiles[0];
+        if (cfg.profiles && cfg.profiles.length > 0) {
+            p = Cfg.findProfile(cfg, widget.profileId);
+            if (!p && !widget.profileId) {
+                p = cfg.profiles[0];
+                widget.settings.profileId = p.id;
+            }
+        }
 
-        var oldHash = widget.profile ? JSON.stringify(widget.profile) : "";
-        var newHash = p ? JSON.stringify(p) : "";
-        if (oldHash !== newHash)
+        if (!widget.profile || !p) {
+            if (widget.profile !== p) widget.profile = p;
+        } else if (Cfg.snapshotDiffersFrom(widget.profile, p)) {
             widget.profile = p;
+        }
     }
 
     // Recompute text and schedule the next wake-up at the moment the
@@ -82,7 +88,7 @@ T.Widget {
                      ? new Date(p.targetDate).getTime() : 0;
 
         if (!targetMs || isNaN(targetMs)) {
-            widget.countdownText = I18n.t("data.notSet");
+            widget.countdownText = qsTr("Not set");
             ticker.interval = 30000;
             ticker.restart();
             return;
@@ -90,7 +96,7 @@ T.Widget {
 
         var diff = targetMs - Date.now();
         if (diff <= 0) {
-            widget.countdownText = I18n.t("data.timesUp");
+            widget.countdownText = qsTr("Time's up!");
             ticker.interval = 30000;
             ticker.restart();
             return;
@@ -103,18 +109,18 @@ T.Widget {
 
         var text, quantum;
         if (days > 0) {
-            text = days + I18n.t("unit.day") + " "
-                 + hours + I18n.t("unit.hour") + " "
-                 + minutes + I18n.t("unit.min");
+            text = days + qsTr("d") + " "
+                 + hours + qsTr("h") + " "
+                 + minutes + qsTr("m");
             quantum = 60000;
         } else if (hours > 0) {
-            text = hours + I18n.t("unit.hour") + " "
-                 + minutes + I18n.t("unit.min") + " "
-                 + seconds + I18n.t("unit.sec");
+            text = hours + qsTr("h") + " "
+                 + minutes + qsTr("m") + " "
+                 + seconds + qsTr("s");
             quantum = 1000;
         } else {
-            text = minutes + I18n.t("unit.min") + " "
-                 + seconds + I18n.t("unit.sec");
+            text = minutes + qsTr("m") + " "
+                 + seconds + qsTr("s");
             quantum = 1000;
         }
 
@@ -131,13 +137,13 @@ T.Widget {
 
     readonly property int effectiveFontWeight:
         (widget.profile && typeof widget.profile.fontWeight === "number")
-            ? widget.profile.fontWeight : 50
+            ? widget.profile.fontWeight : Cfg.DEFAULT_FONT_WEIGHT
 
     readonly property real effectiveLineHeight:
         (widget.profile && typeof widget.profile.lineHeight === "number")
             ? widget.profile.lineHeight : Cfg.DEFAULT_LINE_HEIGHT
 
-    // Stroke is only applied when enabled and a color is set.
+    // Stroke only drawn when explicitly enabled and color is set.
     readonly property string effectiveStrokeColor: {
         if (!widget.profile) return "";
         if (!widget.profile.strokeEnabled) return "";
@@ -154,19 +160,21 @@ T.Widget {
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
-            elide: Text.ElideRight
 
             text: widget.profile
-                  ? (widget.profile.title || I18n.t("data.defaultTitle"))
-                  : I18n.t("data.defaultTitle")
+                  ? (widget.profile.title || qsTr("Time until target"))
+                  : qsTr("Time until target")
 
             font.family: widget.effectiveFontFamily
             font.weight: widget.effectiveFontWeight
-            font.pixelSize: widget.profile ? (widget.profile.titleSize || 24) : 24
+            font.pixelSize: widget.profile
+                          ? (widget.profile.titleSize || Cfg.DEFAULT_TITLE_SIZE)
+                          : Cfg.DEFAULT_TITLE_SIZE
             lineHeight: widget.effectiveLineHeight
             lineHeightMode: Text.ProportionalHeight
-            color: widget.profile ? (widget.profile.titleColor || "#bbffffff")
-                                  : "#bbffffff"
+            color: widget.profile
+                 ? (widget.profile.titleColor || Cfg.DEFAULT_TITLE_COLOR)
+                 : Cfg.DEFAULT_TITLE_COLOR
             style: widget.effectiveStrokeColor ? Text.Outline : Text.Normal
             styleColor: widget.effectiveStrokeColor || "transparent"
         }
@@ -176,17 +184,19 @@ T.Widget {
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
-            elide: Text.ElideRight
 
             text: widget.countdownText
 
             font.family: widget.effectiveFontFamily
             font.weight: widget.effectiveFontWeight
-            font.pixelSize: widget.profile ? (widget.profile.valueSize || 24) : 24
+            font.pixelSize: widget.profile
+                          ? (widget.profile.valueSize || Cfg.DEFAULT_VALUE_SIZE)
+                          : Cfg.DEFAULT_VALUE_SIZE
             lineHeight: widget.effectiveLineHeight
             lineHeightMode: Text.ProportionalHeight
-            color: widget.profile ? (widget.profile.valueColor || "#bbffffff")
-                                  : "#bbffffff"
+            color: widget.profile
+                 ? (widget.profile.valueColor || Cfg.DEFAULT_VALUE_COLOR)
+                 : Cfg.DEFAULT_VALUE_COLOR
             style: widget.effectiveStrokeColor ? Text.Outline : Text.Normal
             styleColor: widget.effectiveStrokeColor || "transparent"
         }
