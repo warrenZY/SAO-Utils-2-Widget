@@ -5,13 +5,19 @@
     "en": "Countdown Widget",
     "zh": "倒计时控件",
     "zh_TW": "倒計時控件",
-    "ja": "カウントダウンウィジェット"
+    "ja": "カウントダウンウィジェット",
+    "tr": "Geri Sayım Widget'ı",
+    "es": "Widget de cuenta atrás",
+    "ru": "Виджет обратного отсчёта"
   },
   "description": {
-    "en": "A countdown widget that supports multiple named profiles and lets you customize fonts, colors, stroke, and line height.",
-    "zh": "支持多套命名配置的倒计时控件，可自定义字体、颜色、描边和行高。",
-    "zh_TW": "支援多套命名配置的倒計時控件，可自訂字體、顏色、描邊和行高。",
-    "ja": "複数のプロファイルに対応したカウントダウンウィジェット。フォント、色、ストローク、行の高さを自由に設定できます。"
+    "en": "A countdown widget that supports multiple named profiles and lets you customize fonts, colors, stroke, and line height.\r\n\r\nChangelog:\r\nv2.1.1 - Migrated to QTranslator for better i18n support\r\nv2.1.0 - Migrated custom controls to NERvGear QML Types\r\nv2.0.1 - Initial release with multiple profile support",
+    "zh": "支持多套命名配置的倒计时控件，可自定义字体、颜色、描边和行高。\r\n\r\n更新日志：\r\nv2.1.1 - 迁移到 QTranslator 以获得更好的国际化支持\r\nv2.1.0 - 将自定义控件迁移到 NERvGear QML Types\r\nv2.0.1 - 初始版本，支持多套命名配置",
+    "zh_TW": "支援多套命名配置的倒計時控件，可自訂字體、顏色、描邊和行高。\r\n\r\n更新日誌：\r\nv2.1.1 - 遷移到 QTranslator 以獲得更好的國際化支援\r\nv2.1.0 - 將自定義控制項遷移到 NERvGear QML Types\r\nv2.0.1 - 初始版本，支援多套命名配置",
+    "ja": "複数のプロファイルに対応したカウントダウンウィジェット。フォント、色、ストローク、行の高さを自由に設定できます。\r\n\r\n更新履歴：\r\nv2.1.1 - より良い国際化サポートのためQTranslatorに移行\r\nv2.1.0 - カスタムコントロールをNERvGear QML Typesに移行\r\nv2.0.1 - 複数プロファイル対応の初回リリース",
+    "tr": "Birden fazla adlandırılmış profili destekleyen ve yazı tiplerini, renkleri, konturu ve satır yüksekliğini özelleştirmenize olanak tanıyan bir geri sayım widget'ı.\r\n\r\nSürüm notları:\r\nv2.1.1 - Daha iyi i18n desteği için QTranslator'a geçirildi\r\nv2.1.0 - Özel kontroller NERvGear QML Types'a taşındı\r\nv2.0.1 - Çoklu profil destekli ilk sürüm",
+    "es": "Un widget de cuenta atrás que admite múltiples perfiles con nombre y permite personalizar fuentes, colores, contorno y altura de línea.\r\n\r\nRegistro de cambios:\r\nv2.1.1 - Migrado a QTranslator para mejorar la compatibilidad con i18n\r\nv2.1.0 - Controles personalizados migrados a NERvGear QML Types\r\nv2.0.1 - Versión inicial con soporte para múltiples perfiles",
+    "ru": "Виджет обратного отсчёта, поддерживающий несколько именованных профилей и позволяющий настраивать шрифты, цвета, обводку и высоту строки.\r\n\r\nСписок изменений:\r\nv2.1.1 - Переход на QTranslator для улучшения поддержки i18n\r\nv2.1.0 - Пользовательские элементы управления перенесены на NERvGear QML Types\r\nv2.0.1 - Первый выпуск с поддержкой нескольких профилей"
   },
   "homepage": "https://github.com/warrenZY/SAO-Utils-2-Widget",
   "bugs": {

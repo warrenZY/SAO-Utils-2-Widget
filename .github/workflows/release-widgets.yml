@@ -154,18 +154,145 @@ jobs:
           # --- Build release notes from package.json ---
           echo "[info] Building release notes from '$PKG'"
           NAME=$(jq -r '.name // "'"$DIR"'"' "$PKG")
+
+          # --- Read Steam Workshop Link if exists ---
+          WORKSHOP_LINK_FILE=".github/widget-info/${DIR}/workshop-link.txt"
+          WORKSHOP_LINK=""
+          if [ -f "$WORKSHOP_LINK_FILE" ]; then
+            WORKSHOP_LINK=$(cat "$WORKSHOP_LINK_FILE" | tr -d '\r\n' | sed 's/^ *//; s/ *$//')
+            echo "[info] Found Steam Workshop link: $WORKSHOP_LINK"
+          fi
+
+          # --- Generate Release Notes ---
           {
             echo "## \`${NAME}\`"
             echo ""
-            echo "> **Version**: \`${VERSION}\`"
+            # Build download URL for the .nvg file
+            DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${DIR}.nvg"
+            echo "> **Version**: \`${VERSION}\` | **Download**: [${DIR}.nvg]($DOWNLOAD_URL)  "
+            if [ -n "$WORKSHOP_LINK" ]; then
+              echo ""
+              echo "**Steam Workshop**: $WORKSHOP_LINK"
+            fi
             echo ""
-            echo "### Titles"
-            echo ""
-            jq -r 'if .title then (.title | to_entries[] | "- **\(.key)**: \(.value)") else "_no title field_" end' "$PKG"
-            echo ""
-            echo "### Descriptions"
-            echo ""
-            jq -r 'if .description then (.description | to_entries[] | "<details>\n<summary><b>\(.key)</b></summary>\n\n\(.value)\n\n</details>\n") else "_no description field_" end' "$PKG"
+
+            # Define language display order and names
+            # Format: "key|Display Name|default_open"
+            LANGUAGES=(
+              "en|English|true"
+              "zh|简体中文|true"
+              "zh_TW|繁體中文|false"
+              "ja|日本語|false"
+              "es|Español|false"
+              "ru|Русский|false"
+              "tr|Türkçe|false"
+            )
+
+            # Get all available languages from package.json
+            AVAILABLE_LANGS=$(jq -r '[(.title // {}), (.description // {})] | add | keys[]' "$PKG" 2>/dev/null || echo "")
+
+            if [ -z "$AVAILABLE_LANGS" ]; then
+              echo "_no title field_"
+            else
+              FIRST_EXPANDED=true
+
+              # Process each language in defined order
+              for LANG_SPEC in "${LANGUAGES[@]}"; do
+                IFS='|' read -r LANG_KEY LANG_NAME DEFAULT_OPEN <<< "$LANG_SPEC"
+
+                # Check if this language exists in package.json
+                if echo "$AVAILABLE_LANGS" | grep -q "^${LANG_KEY}$"; then
+                  TITLE=$(jq -r --arg lang "$LANG_KEY" '.title[$lang] // ""' "$PKG")
+                  DESC=$(jq -r --arg lang "$LANG_KEY" '.description[$lang] // ""' "$PKG")
+
+                  # Skip if both title and description are empty
+                  if [ -z "$TITLE" ] && [ -z "$DESC" ]; then
+                    continue
+                  fi
+
+                  # Determine if this section should be expanded by default
+                  if [ "$DEFAULT_OPEN" = "true" ] && [ "$FIRST_EXPANDED" = "true" ]; then
+                    # First expanded section (English)
+                    echo "---"
+                    echo ""
+                    echo "### $LANG_NAME"
+                    echo ""
+                    if [ -n "$TITLE" ]; then
+                      echo "**$TITLE**"
+                      echo ""
+                    fi
+                    if [ -n "$DESC" ]; then
+                      echo "$DESC"
+                      echo ""
+                    fi
+                    FIRST_EXPANDED=false
+                  elif [ "$DEFAULT_OPEN" = "true" ]; then
+                    # Second expanded section (Simplified Chinese)
+                    echo "---"
+                    echo ""
+                    echo "### $LANG_NAME"
+                    echo ""
+                    if [ -n "$TITLE" ]; then
+                      echo "**$TITLE**"
+                      echo ""
+                    fi
+                    if [ -n "$DESC" ]; then
+                      echo "$DESC"
+                      echo ""
+                    fi
+                  else
+                    # Collapsed section for other languages
+                    echo "<details>"
+                    echo "<summary><b>$LANG_NAME</b></summary>"
+                    echo ""
+                    if [ -n "$TITLE" ]; then
+                      echo "**$TITLE**"
+                      echo ""
+                    fi
+                    if [ -n "$DESC" ]; then
+                      echo "$DESC"
+                      echo ""
+                    fi
+                    echo "</details>"
+                    echo ""
+                  fi
+                fi
+              done
+
+              # Process any remaining languages not in the predefined list
+              for LANG_KEY in $AVAILABLE_LANGS; do
+                # Skip if already processed
+                SKIP=false
+                for LANG_SPEC in "${LANGUAGES[@]}"; do
+                  IFS='|' read -r DEFINED_KEY _ _ <<< "$LANG_SPEC"
+                  if [ "$LANG_KEY" = "$DEFINED_KEY" ]; then
+                    SKIP=true
+                    break
+                  fi
+                done
+
+                if [ "$SKIP" = "false" ]; then
+                  TITLE=$(jq -r --arg lang "$LANG_KEY" '.title[$lang] // ""' "$PKG")
+                  DESC=$(jq -r --arg lang "$LANG_KEY" '.description[$lang] // ""' "$PKG")
+
+                  if [ -n "$TITLE" ] || [ -n "$DESC" ]; then
+                    echo "<details>"
+                    echo "<summary><b>$LANG_KEY</b></summary>"
+                    echo ""
+                    if [ -n "$TITLE" ]; then
+                      echo "**$TITLE**"
+                      echo ""
+                    fi
+                    if [ -n "$DESC" ]; then
+                      echo "$DESC"
+                      echo ""
+                    fi
+                    echo "</details>"
+                    echo ""
+                  fi
+                fi
+              done
+            fi
           } > "$NOTES"
 
           echo "[info] Release notes:"
