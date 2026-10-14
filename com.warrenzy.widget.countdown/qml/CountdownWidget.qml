@@ -14,12 +14,10 @@ T.Widget {
     implicitWidth: 260
     implicitHeight: 80
 
-    action: CountdownAction { widgetRef: widget }
-
     menu: Menu {
         MenuItem {
-            text: qsTr("Settings")
-            onTriggered: widget.action.execute()
+            text: qsTr("Settings...")
+            onTriggered: settingsDialog.active = true
         }
     }
 
@@ -57,11 +55,6 @@ T.Widget {
         onTriggered: widget.refreshCountdown()
     }
 
-    // Pull this widget's entry from the shared store. The binding is
-    // sticky: a stale id is kept as-is and the widget shows the empty
-    // state, so a delete in another window does not silently rebind
-    // this instance elsewhere. Only an unbound instance adopts the
-    // first profile.
     function refreshProfile() {
         var cfg = Cfg.loadConfig();
         var p = null;
@@ -80,8 +73,6 @@ T.Widget {
         }
     }
 
-    // Recompute text and schedule the next wake-up at the moment the
-    // last visible digit will change.
     function refreshCountdown() {
         var p = widget.profile;
         var targetMs = (p && p.targetDate)
@@ -143,7 +134,6 @@ T.Widget {
         (widget.profile && typeof widget.profile.lineHeight === "number")
             ? widget.profile.lineHeight : Cfg.DEFAULT_LINE_HEIGHT
 
-    // Stroke only drawn when explicitly enabled and color is set.
     readonly property string effectiveStrokeColor: {
         if (!widget.profile) return "";
         if (!widget.profile.strokeEnabled) return "";
@@ -199,6 +189,15 @@ T.Widget {
                  : Cfg.DEFAULT_VALUE_COLOR
             style: widget.effectiveStrokeColor ? Text.Outline : Text.Normal
             styleColor: widget.effectiveStrokeColor || "transparent"
+        }
+    }
+
+    Loader {
+        id: settingsDialog
+        active: false
+        sourceComponent: CountdownSettings {
+            targetWidget: widget
+            onClosing: settingsDialog.active = false
         }
     }
 }

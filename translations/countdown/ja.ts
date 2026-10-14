@@ -4,18 +4,14 @@
 <context>
     <name>CountdownWidget</name>
     <message><source>Countdown</source><translation>カウントダウン</translation></message>
-    <message><source>Settings</source><translation>設定</translation></message>
-    <message><source>Time until target</source><translation>目標まで</translation></message>
+    <message><source>Settings...</source><translation>設定...</translation></message>
+    <message><source>Time until target</source><translation>目標までの時間</translation></message>
     <message><source>Not set</source><translation>未設定</translation></message>
-    <message><source>Time's up!</source><translation>時間です！</translation></message>
+    <message><source>Time's up!</source><translation>時間切れ！</translation></message>
     <message><source>d</source><translation>日</translation></message>
     <message><source>h</source><translation>時間</translation></message>
     <message><source>m</source><translation>分</translation></message>
     <message><source>s</source><translation>秒</translation></message>
-</context>
-<context>
-    <name>CountdownAction</name>
-    <message><source>Settings</source><translation>設定</translation></message>
 </context>
 <context>
     <name>CountdownSettings</name>
@@ -26,20 +22,20 @@
     <message><source>(No valid profile)</source><translation>（有効なプロファイルなし）</translation></message>
     <message><source> (unsaved)</source><translation>（未保存）</translation></message>
     <message><source>Font</source><translation>フォント</translation></message>
-    <message><source>Font Weight</source><translation>ウェイト</translation></message>
+    <message><source>Font Weight</source><translation>フォントの太さ</translation></message>
     <message><source>Line Height</source><translation>行の高さ</translation></message>
-    <message><source>Enable Outline</source><translation>輪郭を有効化</translation></message>
-    <message><source>Type to search fonts...</source><translation>入力して検索...</translation></message>
+    <message><source>Enable Outline</source><translation>アウトラインを有効化</translation></message>
+    <message><source>Type to search fonts...</source><translation>入力してフォントを検索...</translation></message>
     <message><source>Countdown Title</source><translation>カウントダウンタイトル</translation></message>
     <message><source>Enter a title</source><translation>タイトルを入力</translation></message>
     <message><source>Target Date (Y-M-D)</source><translation>目標日付（年-月-日）</translation></message>
     <message><source>Target Time (H:M)</source><translation>目標時刻（時:分）</translation></message>
     <message><source>Title</source><translation>タイトル</translation></message>
     <message><source>Countdown</source><translation>カウントダウン</translation></message>
-    <message><source>Apply Current</source><translation>現在に適用</translation></message>
+    <message><source>Apply Current</source><translation>現在のプロファイルを適用</translation></message>
     <message><source>Save All</source><translation>すべて保存</translation></message>
     <message><source>Apply &amp;&amp; Close</source><translation>適用して閉じる</translation></message>
     <message><source>Settings saved.</source><translation>設定を保存しました。</translation></message>
-    <message><source>Time until tomorrow</source><translation>明日まで</translation></message>
+    <message><source>Time until tomorrow</source><translation>明日までの時間</translation></message>
 </context>
 </TS>

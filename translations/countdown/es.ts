@@ -4,18 +4,14 @@
 <context>
     <name>CountdownWidget</name>
     <message><source>Countdown</source><translation>Cuenta atrás</translation></message>
-    <message><source>Settings</source><translation>Ajustes</translation></message>
+    <message><source>Settings...</source><translation>Ajustes...</translation></message>
     <message><source>Time until target</source><translation>Tiempo hasta el objetivo</translation></message>
     <message><source>Not set</source><translation>Sin definir</translation></message>
-    <message><source>Time's up!</source><translation>¡Tiempo agotado!</translation></message>
+    <message><source>Time's up!</source><translation>¡Se acabó el tiempo!</translation></message>
     <message><source>d</source><translation>d</translation></message>
     <message><source>h</source><translation>h</translation></message>
     <message><source>m</source><translation>min</translation></message>
     <message><source>s</source><translation>s</translation></message>
-</context>
-<context>
-    <name>CountdownAction</name>
-    <message><source>Settings</source><translation>Ajustes</translation></message>
 </context>
 <context>
     <name>CountdownSettings</name>
@@ -26,7 +22,7 @@
     <message><source>(No valid profile)</source><translation>(Sin perfil válido)</translation></message>
     <message><source> (unsaved)</source><translation> (sin guardar)</translation></message>
     <message><source>Font</source><translation>Fuente</translation></message>
-    <message><source>Font Weight</source><translation>Grosor</translation></message>
+    <message><source>Font Weight</source><translation>Grosor de fuente</translation></message>
     <message><source>Line Height</source><translation>Altura de línea</translation></message>
     <message><source>Enable Outline</source><translation>Activar contorno</translation></message>
     <message><source>Type to search fonts...</source><translation>Escriba para buscar fuentes...</translation></message>
@@ -36,7 +32,7 @@
     <message><source>Target Time (H:M)</source><translation>Hora objetivo (H:M)</translation></message>
     <message><source>Title</source><translation>Título</translation></message>
     <message><source>Countdown</source><translation>Cuenta atrás</translation></message>
-    <message><source>Apply Current</source><translation>Aplicar actual</translation></message>
+    <message><source>Apply Current</source><translation>Aplicar perfil actual</translation></message>
     <message><source>Save All</source><translation>Guardar todo</translation></message>
     <message><source>Apply &amp;&amp; Close</source><translation>Aplicar y cerrar</translation></message>
     <message><source>Settings saved.</source><translation>Ajustes guardados.</translation></message>

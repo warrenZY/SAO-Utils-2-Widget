@@ -4,7 +4,7 @@
 <context>
     <name>CountdownWidget</name>
     <message><source>Countdown</source><translation>倒計時</translation></message>
-    <message><source>Settings</source><translation>設定</translation></message>
+    <message><source>Settings...</source><translation>設定...</translation></message>
     <message><source>Time until target</source><translation>距離目標還有</translation></message>
     <message><source>Not set</source><translation>未設定目標</translation></message>
     <message><source>Time's up!</source><translation>時間到！</translation></message>
@@ -12,10 +12,6 @@
     <message><source>h</source><translation>小時</translation></message>
     <message><source>m</source><translation>分鐘</translation></message>
     <message><source>s</source><translation>秒</translation></message>
-</context>
-<context>
-    <name>CountdownAction</name>
-    <message><source>Settings</source><translation>設定</translation></message>
 </context>
 <context>
     <name>CountdownSettings</name>
@@ -36,7 +32,7 @@
     <message><source>Target Time (H:M)</source><translation>目標時間（時:分）</translation></message>
     <message><source>Title</source><translation>標題</translation></message>
     <message><source>Countdown</source><translation>倒計時</translation></message>
-    <message><source>Apply Current</source><translation>套用當前</translation></message>
+    <message><source>Apply Current</source><translation>套用目前設定檔</translation></message>
     <message><source>Save All</source><translation>儲存全部</translation></message>
     <message><source>Apply &amp;&amp; Close</source><translation>套用並關閉</translation></message>
     <message><source>Settings saved.</source><translation>設定已儲存。</translation></message>

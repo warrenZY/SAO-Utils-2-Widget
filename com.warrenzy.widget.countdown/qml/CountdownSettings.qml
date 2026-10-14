@@ -12,7 +12,6 @@ NVG.Window {
     id: settingsWindow
 
     property var targetWidget: null
-    property var ownerAction: null
     property int hubSubscriptionId: -1
 
     title: qsTr("Countdown Settings")
@@ -95,10 +94,7 @@ NVG.Window {
     Component.onDestruction: {
         if (hubSubscriptionId >= 0)
             Hub.unsubscribe(hubSubscriptionId);
-        if (ownerAction && ownerAction.settingsWindow === settingsWindow)
-            ownerAction.settingsWindow = null;
     }
-    onClosing: destroy()
 
     // ---- Hub ----
 
